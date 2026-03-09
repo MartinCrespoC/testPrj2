@@ -1,0 +1,8 @@
+### HARDWARE CONSTRAINTS: Mac M2 con 8GB RAM
+Como asistente, Antigravity DEBE optimizar todas sus sugerencias y la ejecución de comandos para evitar la saturación de RAM local en esta máquina (8GB).
+
+1. **Gestión de Memoria en la Terminal**: Nunca mandes a ejecutar rutinas extremadamente pesadas que corran de forma simultánea. Levanta servidores locales o construcciones (builds) uno por vez.
+2. **Node.js Optimization**: Cuando sugieras o ejecutes scripts pesados en proyectos de Node.js, considera hacerlo con entornos limitados para que no roben más de ~4GB, dejando RAM libre para el OS y VS Code (ej. sugiriendo `NODE_OPTIONS=--max-old-space-size=4096`).
+3. **Docker Ligero**: Si el desarrollo involucra Docker, opta proactivamente por imágenes ligeras de Alpine. Evita subir múltiples contenedores al mismo tiempo o advierte del coste de RAM antes de levantar JVMs pesadas o bases de datos sin optimizar.
+4. **I/O Inteligente**: Nunca utilices comandos generales como `grep` sin filtros restrictivos sobre directorios gigantescos, usando las herramientas optimizadas (`grep_search`, `list_dir`) para no gastar I/O en carpetas como `node_modules` o `.git`, protegiendo el hardware.
+5. **Comandos Ligeros en el IDE**: Evita que Antigravity intente volcar miles de líneas de logs de golpe en la consola interior del editor, lo que podría gastar la memoria reservada del IDE.

@@ -1,0 +1,289 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { Search, Bell, Plus, Filter, MoreHorizontal, X } from 'lucide-react';
+import { useParams } from 'next/navigation';
+import '../../dashboard.css';
+
+type Task = {
+    id: number;
+    title: string;
+    description: string;
+    priority: string;
+    status: string;
+    assignee_name?: string;
+    due_date?: string;
+    assignee_id?: number;
+};
+
+export default function KanbanPage() {
+    const params = useParams();
+    const projectId = params.id as string;
+
+    const [tasks, setTasks] = useState<Task[]>([]);
+    const [project, setProject] = useState<any>(null);
+    const [users, setUsers] = useState<any[]>([]);
+
+    const [search, setSearch] = useState('');
+    const [filterPriority, setFilterPriority] = useState('All');
+
+    const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+    const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
+    const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+
+    const [taskForm, setTaskForm] = useState({ title: '', priority: 'Medium', status: 'TODO', assignee_id: '', description: '' });
+
+    useEffect(() => {
+        fetchData();
+    }, [projectId]);
+
+    const fetchData = async () => {
+        const [tasksRes, projsRes, usersRes] = await Promise.all([
+            fetch(`/api/tasks?project_id=${projectId}`),
+            fetch(`/api/projects`),
+            fetch('/api/users')
+        ]);
+        const tasksData = await tasksRes.json();
+        const projsData = await projsRes.json();
+        const usersData = await usersRes.json();
+
+        if (tasksData.tasks) setTasks(tasksData.tasks);
+        if (usersData.users) setUsers(usersData.users);
+        if (projsData.projects) {
+            const p = projsData.projects.find((pr: any) => pr.id.toString() === projectId);
+            setProject(p);
+        }
+    };
+
+    const handleDragStart = (e: React.DragEvent, id: number) => {
+        e.dataTransfer.setData('taskId', id.toString());
+    };
+
+    const handleDrop = async (e: React.DragEvent, newStatus: string) => {
+        e.preventDefault();
+        const taskId = e.dataTransfer.getData('taskId');
+        if (!taskId) return;
+
+        // Optimistic update
+        setTasks(prev => prev.map(t => t.id.toString() === taskId ? { ...t, status: newStatus } : t));
+
+        await fetch(`/api/tasks/${taskId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: newStatus })
+        });
+        fetchData();
+    };
+
+    const handleCreateTask = async (e: React.FormEvent) => {
+        e.preventDefault();
+        await fetch('/api/tasks', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                ...taskForm,
+                project_id: parseInt(projectId),
+                assignee_id: taskForm.assignee_id ? parseInt(taskForm.assignee_id) : null
+            })
+        });
+        setIsTaskModalOpen(false);
+        setTaskForm({ title: '', priority: 'Medium', status: 'TODO', assignee_id: '', description: '' });
+        fetchData();
+    };
+
+    const getInitials = (name: string) => name ? name.split(' ').map(n => n[0]).join('').substring(0, 2) : 'U';
+
+    const columns = [
+        { id: 'TODO', title: 'To Do', color: 'var(--text-secondary)' },
+        { id: 'IN_PROGRESS', title: 'In Progress', color: 'var(--warning-color)' },
+        { id: 'DONE', title: 'Done', color: 'var(--success-color)' }
+    ];
+
+    const filteredTasks = tasks.filter(t => {
+        const matchesSearch = t.title.toLowerCase().includes(search.toLowerCase()) || (t.description || '').toLowerCase().includes(search.toLowerCase());
+        const matchesFilter = filterPriority === 'All' || t.priority === filterPriority;
+        return matchesSearch && matchesFilter;
+    });
+
+    return (
+        <div className="users-page flex-col h-full animate-fade-in" style={{ display: 'flex' }}>
+            <div className="topbar">
+                <div className="topbar-title">
+                    <div className="dot" style={{ backgroundColor: project ? project.color : 'white', width: 12, height: 12 }}></div>
+                    <h1 className="text-xl font-bold text-white">{project?.name || 'Loading Project...'}</h1>
+                </div>
+
+                <div className="search-bar hidden md:block">
+                    <Search size={16} />
+                    <input type="text" placeholder="Search in board..." value={search} onChange={e => setSearch(e.target.value)} />
+                </div>
+
+                <div className="topbar-actions text-muted relative" style={{ position: 'relative' }}>
+                    <button className={`icon-btn ${filterPriority !== 'All' ? 'text-primary' : ''}`} onClick={() => setIsFilterModalOpen(!isFilterModalOpen)}>
+                        <Filter size={20} color={filterPriority !== 'All' ? 'var(--primary-color)' : 'currentColor'} />
+                    </button>
+
+                    {isFilterModalOpen && (
+                        <div className="absolute bg-[#1c1e28] border border-[#262933] p-4 rounded-lg shadow-lg z-50 w-48" style={{ position: 'absolute', top: '40px', right: '120px', background: 'var(--card-bg)', border: '1px solid var(--border-color)', padding: '1rem', borderRadius: 'var(--radius-md)', zIndex: 50 }}>
+                            <h4 className="text-sm font-semibold text-white mb-2">Priority Filter</h4>
+                            <select className="w-full" value={filterPriority} onChange={(e) => { setFilterPriority(e.target.value); setIsFilterModalOpen(false); }} style={{ width: '100%' }}>
+                                <option value="All">All Priorities</option>
+                                <option value="High">High</option>
+                                <option value="Medium">Medium</option>
+                                <option value="Low">Low</option>
+                            </select>
+                        </div>
+                    )}
+
+                    <button className="icon-btn"><Bell size={20} /></button>
+                    <div className="header-divider hidden md:block"></div>
+                    <button className="btn btn-primary ml-2 rounded-lg text-sm" onClick={() => setIsMemberModalOpen(true)}>
+                        <Plus size={16} className="mr-1 inline" /> Add Member
+                    </button>
+                </div>
+            </div>
+
+            <div className="page-content" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                <div className="kanban-board" style={{ flex: 1 }}>
+                    {columns.map(col => {
+                        const columnTasks = filteredTasks.filter(t => t.status === col.id);
+                        return (
+                            <div
+                                key={col.id}
+                                className="kanban-column"
+                                onDragOver={(e) => e.preventDefault()}
+                                onDrop={(e) => handleDrop(e, col.id)}
+                            >
+                                <div className="kanban-header">
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                        <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: col.color, display: 'inline-block' }}></span>
+                                        {col.title}
+                                    </div>
+                                    <span className="kanban-column-count">{columnTasks.length}</span>
+                                </div>
+
+                                <div className="kanban-tasks">
+                                    {columnTasks.map(task => (
+                                        <div
+                                            key={task.id}
+                                            className="kanban-card"
+                                            draggable
+                                            onDragStart={(e) => handleDragStart(e, task.id)}
+                                        >
+                                            <div className="flex justify-between items-start mb-2" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                                <span className={`badge badge-${task.priority === 'High' ? 'inactive' : task.priority === 'Medium' ? 'editor' : 'admin'}`} style={{ fontSize: '10px', padding: '2px 6px' }}>
+                                                    {task.priority.toUpperCase()}
+                                                </span>
+                                                <MoreHorizontal size={16} className="text-muted cursor-pointer" />
+                                            </div>
+                                            <h4 className="font-semibold text-white mb-1">{task.title}</h4>
+                                            {task.description && (
+                                                <p className="text-xs text-muted mb-4" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{task.description}</p>
+                                            )}
+
+                                            <div className="flex justify-between items-center mt-auto pt-2 border-t" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderColor: 'var(--border-color)', borderTopStyle: 'solid', borderTopWidth: '1px' }}>
+                                                <div className="text-xs text-muted">
+                                                    {task.due_date ? new Date(task.due_date).toLocaleDateString() : ''}
+                                                </div>
+                                                <div className="avatar" style={{ width: 24, height: 24, fontSize: '0.65rem' }}>
+                                                    {getInitials(task.assignee_name || '')}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+
+                                    <button className="kanban-add-btn" onClick={() => {
+                                        setTaskForm({ ...taskForm, status: col.id });
+                                        setIsTaskModalOpen(true);
+                                    }}>
+                                        <Plus size={16} /> Add Task
+                                    </button>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+
+            {/* Create Task Modal */}
+            {isTaskModalOpen && (
+                <div className="modal-overlay">
+                    <div className="modal-card animate-fade-in card">
+                        <div className="flex justify-between items-center mb-6" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <h2 className="text-xl font-bold text-white">Create Task in {project?.name}</h2>
+                            <button className="icon-btn" onClick={() => setIsTaskModalOpen(false)}><X size={20} /></button>
+                        </div>
+
+                        <form onSubmit={handleCreateTask} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            <div>
+                                <label className="text-sm text-muted mb-2 block" style={{ marginBottom: '0.5rem' }}>Task Title</label>
+                                <input type="text" value={taskForm.title} onChange={e => setTaskForm({ ...taskForm, title: e.target.value })} required style={{ width: '100%' }} />
+                            </div>
+                            <div>
+                                <label className="text-sm text-muted mb-2 block" style={{ marginBottom: '0.5rem' }}>Description</label>
+                                <textarea value={taskForm.description} onChange={e => setTaskForm({ ...taskForm, description: e.target.value })} rows={3} style={{ width: '100%', resize: 'none' }} />
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '1rem' }}>
+                                <div style={{ flex: 1 }}>
+                                    <label className="text-sm text-muted mb-2 block" style={{ marginBottom: '0.5rem' }}>Assignee</label>
+                                    <select value={taskForm.assignee_id} onChange={e => setTaskForm({ ...taskForm, assignee_id: e.target.value })} style={{ width: '100%' }} required>
+                                        <option value="">Select Assignee...</option>
+                                        {users.map((u: any) => <option key={u.id} value={u.id}>{u.name}</option>)}
+                                    </select>
+                                </div>
+                                <div style={{ flex: 1 }}>
+                                    <label className="text-sm text-muted mb-2 block" style={{ marginBottom: '0.5rem' }}>Priority</label>
+                                    <select value={taskForm.priority} onChange={e => setTaskForm({ ...taskForm, priority: e.target.value })} style={{ width: '100%' }}>
+                                        <option value="Low">Low</option>
+                                        <option value="Medium">Medium</option>
+                                        <option value="High">High</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '1.5rem' }}>
+                                <button type="button" className="btn btn-secondary" onClick={() => setIsTaskModalOpen(false)}>Cancel</button>
+                                <button type="submit" className="btn btn-primary">Create Task</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Add Member Modal (Dummy) */}
+            {isMemberModalOpen && (
+                <div className="modal-overlay">
+                    <div className="modal-card animate-fade-in card" style={{ maxWidth: '400px' }}>
+                        <div className="flex justify-between items-center mb-6" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <h2 className="text-xl font-bold text-white">Project Members</h2>
+                            <button className="icon-btn" onClick={() => setIsMemberModalOpen(false)}><X size={20} /></button>
+                        </div>
+                        <p className="text-muted text-sm mb-4">Invite team members to collaborate on {project?.name}.</p>
+
+                        <div className="search-bar mb-4" style={{ width: '100%' }}>
+                            <Search size={16} />
+                            <input type="text" placeholder="Search by email..." style={{ width: '100%' }} />
+                        </div>
+
+                        <div className="flex flex-col gap-3" style={{ maxHeight: '200px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            {users.map((u: any) => (
+                                <div key={u.id} className="flex items-center justify-between" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <div className="flex items-center gap-3" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                        <div className="avatar" style={{ width: 32, height: 32, fontSize: '0.75rem' }}>{getInitials(u.name)}</div>
+                                        <div>
+                                            <div className="text-sm font-semibold text-white">{u.name}</div>
+                                            <div className="text-xs text-muted">{u.email}</div>
+                                        </div>
+                                    </div>
+                                    <button className="btn btn-secondary text-xs" style={{ padding: '0.25rem 0.5rem' }} onClick={() => alert(`Invitation sent to ${u.email}!`)}>Invite</button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+        </div>
+    );
+}
