@@ -14,13 +14,23 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const [adminUser, setAdminUser] = useState<any>(null);
 
     useEffect(() => {
-        fetch('/api/auth/me').then(res => res.json()).then(data => {
+        fetch('/api/auth/me').then(async res => {
+            if (!res.ok) {
+                router.push('/login');
+                throw new Error('Not authenticated');
+            }
+            return res.json();
+        }).then(data => {
             if (data.user) setAdminUser(data.user);
-        });
-        fetch('/api/projects').then(res => res.json()).then(data => {
+        }).catch(err => console.error("Auth check failed:", err));
+
+        fetch('/api/projects').then(res => {
+            if (!res.ok) return { projects: [] };
+            return res.json();
+        }).then(data => {
             if (data.projects) setProjects(data.projects);
-        });
-    }, []);
+        }).catch(() => {});
+    }, [router]);
 
     const handleLogout = async () => {
         await fetch('/api/auth/logout', { method: 'POST' });
@@ -52,7 +62,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         <FileText size={20} />
                         <span>OCR Recetas</span>
                     </a>
-                    <a href="#" className="nav-item">
+                    <a href="/dashboard/settings" className={`nav-item ${pathname === '/dashboard/settings' ? 'active' : ''}`}>
                         <Settings size={20} />
                         <span>Settings</span>
                     </a>
