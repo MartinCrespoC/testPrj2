@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Search, Bell, Plus, Filter, MoreHorizontal, X } from 'lucide-react';
+import { Search, Bell, Plus, Filter, MoreHorizontal, X, Sparkles } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import '../../dashboard.css';
 
@@ -30,6 +30,10 @@ export default function KanbanPage() {
     const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
     const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
     const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+    const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
+    
+    const [summaryLoading, setSummaryLoading] = useState(false);
+    const [summaryText, setSummaryText] = useState('');
 
     const [taskForm, setTaskForm] = useState({ title: '', priority: 'Medium', status: 'TODO', assignee_id: '', description: '' });
 
@@ -93,6 +97,32 @@ export default function KanbanPage() {
 
     const getInitials = (name: string) => name ? name.split(' ').map(n => n[0]).join('').substring(0, 2) : 'U';
 
+    const handleGenerateSummary = async () => {
+        setIsSummaryModalOpen(true);
+        setSummaryLoading(true);
+        setSummaryText('');
+        
+        try {
+            const prompt = `Genera un breve resumen en español de las siguientes tareas del proyecto "${project?.name || 'Actual'}": ${JSON.stringify(tasks.map(t => ({ titulo: t.title, estado: t.status, prioridad: t.priority })))}. Destaca lo urgente y el progreso general en 2 a 3 lineas y en formato de reporte directo al usuario que esta consumiendo el dashboard.`;
+            
+            const res = await fetch('/api/ai/summary', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt })
+            });
+            const data = await res.json();
+            if(data.text) {
+                setSummaryText(data.text);
+            } else {
+                setSummaryText('No se pudo generar el resumen.');
+            }
+        } catch(e) {
+            setSummaryText('Error al conectar con la IA.');
+        } finally {
+            setSummaryLoading(false);
+        }
+    };
+
     const columns = [
         { id: 'TODO', title: 'To Do', color: 'var(--text-secondary)' },
         { id: 'IN_PROGRESS', title: 'In Progress', color: 'var(--warning-color)' },
@@ -135,6 +165,7 @@ export default function KanbanPage() {
                         </div>
                     )}
 
+                    <button className="icon-btn" onClick={handleGenerateSummary} title="AI Summary"><Sparkles size={20} /></button>
                     <button className="icon-btn"><Bell size={20} /></button>
                     <div className="header-divider hidden md:block"></div>
                     <button className="btn btn-primary ml-2 rounded-lg text-sm" onClick={() => setIsMemberModalOpen(true)}>
@@ -279,6 +310,36 @@ export default function KanbanPage() {
                                     <button className="btn btn-secondary text-xs" style={{ padding: '0.25rem 0.5rem' }} onClick={() => alert(`Invitation sent to ${u.email}!`)}>Invite</button>
                                 </div>
                             ))}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* AI Summary Modal */}
+            {isSummaryModalOpen && (
+                <div className="modal-overlay">
+                    <div className="modal-card animate-fade-in card" style={{maxWidth: '500px'}}>
+                        <div className="flex justify-between items-center mb-6" style={{display: 'flex', justifyContent: 'space-between'}}>
+                            <div style={{display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
+                                <Sparkles size={20} color="#a855f7" />
+                                <h2 className="text-xl font-bold text-white">AI Project Summary</h2>
+                            </div>
+                            <button className="icon-btn" onClick={() => setIsSummaryModalOpen(false)}><X size={20}/></button>
+                        </div>
+                        <div className="bg-[#101217] p-4 rounded-lg border border-[#262933]" style={{backgroundColor: 'var(--bg-color)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', padding: '1rem'}}>
+                            {summaryLoading ? (
+                                <div style={{display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)'}}>
+                                    <Sparkles size={16} className="animate-pulse" style={{color: 'var(--primary-color)'}}/>
+                                    <span className="text-sm">Analizando tareas del proyecto con Gemini...</span>
+                                </div>
+                            ) : (
+                                <p className="text-sm text-white" style={{lineHeight: '1.6'}}>
+                                    {summaryText}
+                                </p>
+                            )}
+                        </div>
+                        <div style={{display: 'flex', justifyContent: 'flex-end', marginTop: '1.5rem'}}>
+                            <button className="btn btn-secondary" onClick={() => setIsSummaryModalOpen(false)}>Close</button>
                         </div>
                     </div>
                 </div>

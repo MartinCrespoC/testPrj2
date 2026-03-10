@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { LayoutDashboard, Users, Settings, LogOut, CheckCircle2 } from 'lucide-react';
+import { LayoutDashboard, Users, Settings, LogOut, CheckCircle2, FileText } from 'lucide-react';
 import './dashboard.css';
 
 type Project = { id: number; name: string; color: string; };
@@ -47,6 +47,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     <a href="/dashboard/users" className={`nav-item ${pathname === '/dashboard/users' ? 'active' : ''}`}>
                         <Users size={20} />
                         <span>User Admin</span>
+                    </a>
+                    <a href="/dashboard/ocr" className={`nav-item ${pathname === '/dashboard/ocr' ? 'active' : ''}`}>
+                        <FileText size={20} />
+                        <span>OCR Recetas</span>
                     </a>
                     <a href="#" className="nav-item">
                         <Settings size={20} />
